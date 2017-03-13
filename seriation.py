@@ -151,6 +151,7 @@ def iterate_eff( candidateTerms, term_ordering, term_iter_index, buffers, bestEn
     # update buffers
     buf_score = 0
     if len(term_ordering) == 0:
+        # what a waaat?
         buffers = buffers
     elif maxPosition >= len(term_ordering):
         if (term_ordering[-1], maxTerm) in combined_g2:
@@ -175,9 +176,7 @@ def iterate_eff( candidateTerms, term_ordering, term_iter_index, buffers, bestEn
         term_ordering.append(maxTerm)
     else:
         term_ordering.insert(maxPosition, maxTerm)
-        term_iter_index.append(maxTerm)
-
-
+    term_iter_index.append(maxTerm)
     return (candidateTerms, term_ordering, term_iter_index, buffers)
 
 def getEnergyChange(candidateTerm, position, term_list, currentBuffer, iteration_no):
