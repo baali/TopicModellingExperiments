@@ -156,20 +156,20 @@ def iterate_eff( candidateTerms, term_ordering, term_iter_index, buffers, bestEn
     elif maxPosition >= len(term_ordering):
         if (term_ordering[-1], maxTerm) in combined_g2:
             buf_score = combined_g2[(term_ordering[-1], maxTerm)]
-            buffers.insert(len(buffers)-1, buf_score)
+        buffers.insert(len(buffers)-1, buf_score)
     elif maxPosition == 0:
         if (maxTerm, term_ordering[0]) in combined_g2:
             buf_score = combined_g2[(maxTerm, term_ordering[0])]
-            buffers.insert(1, buf_score)
+        buffers.insert(1, buf_score)
     else:
         if (term_ordering[maxPosition-1], maxTerm) in combined_g2:
             buf_score = combined_g2[(term_ordering[maxPosition-1], maxTerm)]
-            buffers[maxPosition] = buf_score
+        buffers[maxPosition] = buf_score
 
         buf_score = 0
         if (maxTerm, term_ordering[maxPosition]) in combined_g2:
             buf_score = combined_g2[(maxTerm, term_ordering[maxPosition])]
-            buffers.insert(maxPosition+1, buf_score)
+        buffers.insert(maxPosition+1, buf_score)
 
     # update term ordering and ranking
     if maxPosition >= len(term_ordering):
