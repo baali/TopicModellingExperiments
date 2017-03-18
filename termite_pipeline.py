@@ -128,19 +128,94 @@ term_info = sorted( term_info, key = lambda term_freq : -term_freq['saliency'] )
 for i, element in enumerate( term_info ):
     element['rank'] = i
 
-for index in range(ldamodel.num_topics):
-    topics = ldamodel.get_topic_terms(index, topn=40)
-    terms = [ldamodel.id2word[topic_id] for (topic_id, prob) in topics]
-    # Reorder terms based on saliency rank
-    reordered_terms = sorted( [term for term in term_info if term['term'] in terms], key = lambda term_freq : term_freq['rank'] )
-    print ('Terms for topic %d order:' %index)
-    print ('{}'.format(' '.join(terms[:20])))
-    print ('{}'.format(' '.join([term['term'] for term in reordered_terms[:20]])))
+from pipeline.io_utils import *
+import os
+def CheckAndMakeDirs( path ):
+    if not os.path.exists( path ):
+        os.makedirs( path )
+
+path = 'data'
+SUBFOLDER = 'saliency'
+TOPIC_WEIGHTS = 'topic-info.json'
+TOPIC_WEIGHTS_TXT = 'topic-info.txt'
+TOPIC_WEIGHTS_FIELDS = [ 'term', 'saliency', 'frequency', 'distinctiveness', 'rank', 'visibility' ]
+TERM_SALIENCY = 'term-info.json'
+TERM_SALIENCY_TXT = 'term-info.txt'
+TERM_SALIENCY_FIELDS = [ 'topic', 'weight' ]
+    
+path = '{}/{}/'.format( path, SUBFOLDER )
+CheckAndMakeDirs( path )
+# WriteAsJson( term_info, path + TERM_SALIENCY )
+# WriteAsJson( topic_info, path + TOPIC_WEIGHTS )
+# WriteAsTabDelimited( topic_info, path + TOPIC_WEIGHTS_TXT, TERM_SALIENCY_FIELDS )
+    
+# for index in range(ldamodel.num_topics):
+#     topics = ldamodel.get_topic_terms(index, topn=40)
+#     terms = [ldamodel.id2word[topic_id] for (topic_id, prob) in topics]
+#     # Reorder terms based on saliency rank
+#     reordered_terms = sorted( [term for term in term_info if term['term'] in terms], key = lambda term_freq : term_freq['rank'] )
+#     print ('Terms for topic %d order:' %index)
+#     print ('{}'.format(' '.join(terms[:20])))
+#     print ('{}'.format(' '.join([term['term'] for term in reordered_terms[:20]])))
 # print(term_info)
 
-
 from similarity import *
+path = 'data'
+path = '{}/{}/'.format( path, SUBFOLDER )
+SUBFOLDER = 'similarity'
+COMBINED_G2 = 'combined-g2.txt'
 combined_g2 = combineSimilarityMatrices(tokens)
+CheckAndMakeDirs( path )
+# WriteAsSparseMatrix( combined_g2, path + COMBINED_G2 )
 
+import time
 from seriation import *
-term_ordering, term_iter_index = compute(combined_g2)
+
+candidateSize = 100
+termFreqs = {}
+termSaliency = {}
+orderedTermList = []
+termRank = {}
+# termDistinct = {}
+#termVisibility = {}
+for element in term_info:
+    term = dictionary.token2id[element['term']]
+    orderedTermList.append( term )
+    termSaliency[term] = element['saliency']
+    termFreqs[term] = element['frequency']
+    termRank[term] = element['rank']
+    # termDistinct[term] = element['distinctiveness']
+    # termVisibility[term] = element['visibility']
+
+start_time = time.time()
+candidateTerms = orderedTermList
+term_ordering = []
+term_iter_index = []
+buffers = [0,0]
+
+preBest = []
+postBest = []
+DEFAULT_NUM_SERIATED_TERMS = 100
+
+for iteration in range(DEFAULT_NUM_SERIATED_TERMS):
+    print("Iteration no. ", iteration)
+
+    addedTerm = 0
+    if len(term_iter_index) > 0:
+        addedTerm = term_iter_index[-1]
+    if iteration == 1:
+        (preBest, postBest) = initBestEnergies(combined_g2, addedTerm, candidateTerms)
+    (preBest, postBest, bestEnergies) = getBestEnergies(combined_g2, preBest, postBest, addedTerm)
+    (candidateTerms, term_ordering, term_iter_index, buffers) = iterate_eff(combined_g2, termRank, termFreqs, termSaliency, candidateTerms, term_ordering, term_iter_index, buffers, bestEnergies, iteration)
+
+seriation_time = time.time() - start_time
+
+print("seriation time: " +  str(seriation_time))
+term_ordering, term_iter_index
+
+term_ordering = [dictionary.id2token[term] for term in term_ordering]
+term_iter_index = [str(index) for index in term_iter_index]
+# term_ordering, term_iter_index = compute()
+CheckAndMakeDirs( 'data/seriation/' )
+WriteAsList( term_ordering, 'data/seriation/term-ordering.txt' )
+WriteAsList( term_iter_index, 'data/seriation/term-iter-index.txt' )

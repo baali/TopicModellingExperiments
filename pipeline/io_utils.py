@@ -66,7 +66,7 @@ def ReadAsJson( filename ):
 def WriteAsList( data, filename ):
     with open( filename, 'w' ) as f:
         for element in data:
-            f.write( element.encode( 'utf-8' ) + '\n' )
+            f.write( element + '\n' )
 
 def WriteAsVector( vector, filename ):
     with open( filename, 'w' ) as f:
