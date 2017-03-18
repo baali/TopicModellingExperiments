@@ -1,67 +1,6 @@
-import time
 from operator import itemgetter
-
-combined_g2 = {}
 candidateSize = 100
-termFreqs = {}
-termSaliency = {}
-orderedTermList = []
-termRank = {}
-DEFAULT_NUM_SERIATED_TERMS = 100
-
-def reshape(term_info):
-    termDistinct = {}
-    termVisibility = {}
-    global termFreqs, termSaliency, orderedTermList, termRank
-    for element in term_info:
-        term = element['term']
-        orderedTermList.append( term )
-        termSaliency[term] = element['saliency']
-        termFreqs[term] = element['frequency']
-        termDistinct[term] = element['distinctiveness']
-        termRank[term] = element['rank']
-        termVisibility[term] = element['visibility']
-
-def compute( numSeriatedTerms=DEFAULT_NUM_SERIATED_TERMS):
-    # Elicit from user (1) the number of terms to output and (2) a list of terms that should be included in the output...
-    # set in init (i.e. read from config file)
-
-    # Seriate!
-    start_time = time.time()
-    candidateTerms = orderedTermList
-    term_ordering = []
-    term_iter_index = []
-    buffers = [0,0]
-
-    preBest = []
-    postBest = []
-
-    for iteration in range(numSeriatedTerms):
-        print("Iteration no. ", iteration)
-
-        addedTerm = 0
-        if len(term_iter_index) > 0:
-            addedTerm = term_iter_index[-1]
-        if iteration == 1:
-            (preBest, postBest) = initBestEnergies(addedTerm, candidateTerms)
-        (preBest, postBest, bestEnergies) = getBestEnergies(preBest, postBest, addedTerm)
-        (candidateTerms, term_ordering, term_iter_index, buffers) = iterate_eff(candidateTerms, term_ordering, term_iter_index, buffers, bestEnergies, iteration)
-
-        print("---------------")
-        if iteration > 10:
-            break
-    seriation_time = time.time() - start_time
-
-    # Output consists of (1) a list of ordered terms, and (2) the iteration index in which a term was ordered
-    #print "term_ordering: ", term_ordering
-    #print "term_iter_index: ", term_iter_index   # Feel free to pick a less confusing variable name
-
-    #print "similarity matrix generation time: ", compute_sim_time
-    #print "seriation time: ", seriation_time
-    print("seriation time: " +  str(seriation_time))
-    return term_ordering, term_iter_index
-
-def initBestEnergies(firstTerm, candidateTerms):
+def initBestEnergies(combined_g2, firstTerm, candidateTerms):
     preBest = []
     postBest = []
     for candidate in candidateTerms:
@@ -80,7 +19,7 @@ def initBestEnergies(firstTerm, candidateTerms):
 
     return (preBest, postBest)
 
-def getBestEnergies(preBest, postBest, addedTerm):
+def getBestEnergies(combined_g2, preBest, postBest, addedTerm):
     if addedTerm == 0:
         return (preBest, postBest, [])
 
@@ -112,7 +51,7 @@ def getBestEnergies(preBest, postBest, addedTerm):
 
     return (preBest, postBest, sorted(bestEnergies, key=itemgetter(1), reverse=True))
 
-def iterate_eff( candidateTerms, term_ordering, term_iter_index, buffers, bestEnergies, iteration_no ):
+def iterate_eff( combined_g2, termRank, termFreqs, termSaliency, candidateTerms, term_ordering, term_iter_index, buffers, bestEnergies, iteration_no ):
     maxEnergyChange = 0.0;
     maxTerm = "";
     maxPosition = 0;
@@ -130,7 +69,7 @@ def iterate_eff( candidateTerms, term_ordering, term_iter_index, buffers, bestEn
             current_buffer = buffers[position]
             candidateRank = termRank[candidate]
             if candidateRank <= (len(term_ordering) + candidateSize):
-                current_energy_change = getEnergyChange(candidate, position, term_ordering, current_buffer, iteration_no)
+                current_energy_change = getEnergyChange(combined_g2, termFreqs, termSaliency, candidate, position, term_ordering, current_buffer, iteration_no)
                 if current_energy_change > maxEnergyChange:
                     maxEnergyChange = current_energy_change
                     maxTerm = candidate
@@ -179,7 +118,7 @@ def iterate_eff( candidateTerms, term_ordering, term_iter_index, buffers, bestEn
     term_iter_index.append(maxTerm)
     return (candidateTerms, term_ordering, term_iter_index, buffers)
 
-def getEnergyChange(candidateTerm, position, term_list, currentBuffer, iteration_no):
+def getEnergyChange(combined_g2, termFreqs, termSaliency, candidateTerm, position, term_list, currentBuffer, iteration_no):
     prevBond = 0.0
     postBond = 0.0
 
