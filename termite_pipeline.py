@@ -219,3 +219,59 @@ term_iter_index = [str(index) for index in term_iter_index]
 CheckAndMakeDirs( 'data/seriation/' )
 WriteAsList( term_ordering, 'data/seriation/term-ordering.txt' )
 WriteAsList( term_iter_index, 'data/seriation/term-iter-index.txt' )
+
+
+term_topic_submatrix = []
+term_subindex = []
+for term in term_ordering:
+    if term in dictionary.token2id:
+        term_topic_matrix = []
+        for index in range(ldamodel.num_topics):
+            term_topic_matrix.append(ldamodel.expElogbeta[index][dictionary.token2id[term]])
+        term_topic_submatrix.append(term_topic_matrix)
+        term_subindex.append(term)
+seriated_parameters = {
+    'termIndex' : term_subindex,
+    'topicIndex' : [i for i in range(ldamodel.num_topics)],
+    'matrix' : term_topic_submatrix
+}
+SERIATED_PARAMETERS = 'seriated-parameters.json'
+
+term_rank_map = { term: value for value, term in enumerate(term_iter_index)}
+term_order_map = { term: value for value, term in enumerate(term_ordering)}
+term_saliency_map = { d['term']: d['saliency'] for d in term_info }
+term_distinctiveness_map = { d['term'] : d['distinctiveness'] for d in term_info }
+filtered_parameters = {
+    'termRankMap' : term_rank_map,
+    'termOrderMap' : term_order_map,
+    'termSaliencyMap' : term_saliency_map,
+    'termDistinctivenessMap' : term_distinctiveness_map
+}
+FILTERED_PARAMETERS = 'filtered-parameters.json'
+
+
+topic_index = [i for i in range(ldamodel.num_topics)]
+term_topic_submatrix = []
+term_subindex = []
+for term in term_ordering:
+    if term in dictionary.token2id:
+        term_topic_matrix = []
+        for index in range(ldamodel.num_topics):
+            term_topic_matrix.append(ldamodel.expElogbeta[index][dictionary.token2id[term]])
+        term_topic_submatrix.append(term_topic_matrix)
+        term_subindex.append(term)
+
+term_freqs = { d['term']: d['frequency'] for d in term_info }
+global_term_freqs = {
+    'termIndex' : term_subindex,
+    'topicIndex' : topic_index,
+    'matrix' : term_topic_submatrix,
+    'termFreqMap' : term_freqs
+    }
+GLOBAL_TERM_FREQS = 'global-term-freqs.json'
+
+SUBFOLDER = 'public_html/data'
+CheckAndMakeDirs( SUBFOLDER )
+WriteAsJson( seriated_parameters, path + SERIATED_PARAMETERS )
+WriteAsJson( filtered_parameters, path + FILTERED_PARAMETERS )
+WriteAsJson( global_term_freqs, path + GLOBAL_TERM_FREQS )
