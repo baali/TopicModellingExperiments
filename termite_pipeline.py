@@ -1,10 +1,16 @@
 from gensim import corpora, models
 import gensim
 import gzip
-
+import requests
 import os.path
+import shutil
+
 if not os.path.isfile('news.gz'):
-    !wget http://acube.di.unipi.it/repo/news.gz
+    print('Fetching news archive news.gz')
+    url = 'http://acube.di.unipi.it/repo/news.gz'
+    response = requests.get(url, stream=True)
+    with open('news.gz', 'wb') as out_file:
+        shutil.copyfileobj(response.raw, out_file)
 
 news_corpus = {}
 texts = []
@@ -31,95 +37,17 @@ with gzip.open('news.gz', 'rb') as news_raw:
         texts.append(tokens)
         categories.add(category)
 
+print('Done parsing data')
 dictionary = corpora.Dictionary(texts)
 corpus = [dictionary.doc2bow(text) for text in texts]
 # tfidf = models.tfidfmodel.TfidfModel(corpus)
 ldamodel = models.ldamodel.LdaModel(corpus, num_topics=len(categories), id2word = dictionary, passes=30)
+print('Done training LDA Model')
 
 tokens = [[dictionary.token2id[word] for word in text] for text in texts]
 
-import pyLDAvis
-import pyLDAvis.gensim
-pyLDAvis.enable_notebook()
-pyLDAvis.gensim.prepare(lda, corpus, dictionary)
-
 # Saliency related functions adapted from https://github.com/StanfordHCI/termite/blob/master/pipeline/compute_saliency.py
-def computeTopicInfo( ldamodel, dictionary ):
-    topn = len(dictionary.items())//100 # .1 % of total dictionary terms
-    topic_info = []
-    for index in range(ldamodel.num_topics):
-        topic_weight = sum([prob_score for term, prob_score in ldamodel.show_topic(index, topn=topn) ])
-        topic_info.append( {
-            'topic' : ldamodel.show_topic(index, topn=topn),
-            'weight' : topic_weight
-        } )
-
-    return topic_info
-
-def getNormalized( counts ):
-    """Rescale a list of counts, so they represent a proper probability distribution."""
-    tally = sum( counts )
-    if tally == 0:
-        probs = [ d for d in counts ]
-    else:
-        probs = [ d / tally for d in counts ]
-    return probs
-
-def computeTermFreq(corpus):
-    from collections import Counter
-    term_freq = Counter()
-    for doc in corpus:
-        for (term, freq) in doc:
-            term_freq[term] += freq
-    return term_freq
-
-def computeTermInfo(ldamodel, dictionary, corpus):
-    """Iterate over the list of terms. Compute frequency, distinctiveness, saliency."""
-    topic_info = computeTopicInfo(ldamodel, dictionary)
-    topic_marginal = getNormalized( [ d['weight'] for d in topic_info ] )
-    term_freq = computeTermFreq(corpus)
-    term_info = []
-    for (tid, term) in dictionary.items():
-        # This is not giving expected results or maybe I am using it
-        # wrong(?)
-        # counts = ldamodel.get_term_topics(tid, minimum_probability=0.00001)
-        # if not counts:
-        #     print('skippping %s as no term_topics were returned for it' %term)
-        #     continue
-        # probs = [0 for index in range(ldamodel.num_topics)]
-        # for (index, prob) in counts:
-        #     probs[index] = prob
-        frequency = term_freq[tid]
-        probs = []
-        for index in range(ldamodel.num_topics):
-            probs.append(ldamodel.expElogbeta[index][tid])
-        probs = getNormalized( probs )
-        distinctiveness = getKLDivergence( probs, topic_marginal )
-        saliency = frequency * distinctiveness
-        term_info.append({
-            'term' : term,
-            'saliency' : saliency,
-            'frequency' : frequency,
-            'distinctiveness' : distinctiveness,
-            'rank' : None,
-            'visibility' : 'default'
-        })
-    return term_info
-
-def getKLDivergence( P, Q ):
-    """Compute KL-divergence from P to Q"""
-    import math
-    divergence = 0
-    assert len(P) == len(Q)
-    for i in range(len(P)):
-        p = P[i]
-        q = Q[i]
-        assert p >= 0
-        assert q >= 0
-        if p > 0:
-            divergence += p * math.log( p / q )
-    return divergence
-
+from saliency import *
 topic_info = computeTopicInfo(ldamodel, dictionary)
 term_info = computeTermInfo(ldamodel, dictionary, corpus)
 
@@ -129,12 +57,12 @@ for i, element in enumerate( term_info ):
     element['rank'] = i
 
 from pipeline.io_utils import *
-import os
+
 def CheckAndMakeDirs( path ):
     if not os.path.exists( path ):
         os.makedirs( path )
 
-path = 'data'
+root = 'docs'
 SUBFOLDER = 'saliency'
 TOPIC_WEIGHTS = 'topic-info.json'
 TOPIC_WEIGHTS_TXT = 'topic-info.txt'
@@ -143,7 +71,7 @@ TERM_SALIENCY = 'term-info.json'
 TERM_SALIENCY_TXT = 'term-info.txt'
 TERM_SALIENCY_FIELDS = [ 'topic', 'weight' ]
     
-path = '{}/{}/'.format( path, SUBFOLDER )
+path = '{}/{}/'.format( root, SUBFOLDER )
 CheckAndMakeDirs( path )
 # WriteAsJson( term_info, path + TERM_SALIENCY )
 # WriteAsJson( topic_info, path + TOPIC_WEIGHTS )
@@ -159,13 +87,14 @@ CheckAndMakeDirs( path )
 #     print ('{}'.format(' '.join([term['term'] for term in reordered_terms[:20]])))
 # print(term_info)
 
+print('Done calculating saliecny values for terms')
 from similarity import *
-path = 'data'
-path = '{}/{}/'.format( path, SUBFOLDER )
 SUBFOLDER = 'similarity'
+path = '{}/{}/'.format( root, SUBFOLDER )
 COMBINED_G2 = 'combined-g2.txt'
 combined_g2 = combineSimilarityMatrices(tokens)
 CheckAndMakeDirs( path )
+print('Done calculating bond energies between terms')
 # WriteAsSparseMatrix( combined_g2, path + COMBINED_G2 )
 
 import time
@@ -177,7 +106,7 @@ termSaliency = {}
 orderedTermList = []
 termRank = {}
 # termDistinct = {}
-#termVisibility = {}
+# termVisibility = {}
 for element in term_info:
     term = dictionary.token2id[element['term']]
     orderedTermList.append( term )
@@ -199,7 +128,6 @@ DEFAULT_NUM_SERIATED_TERMS = 100
 
 for iteration in range(DEFAULT_NUM_SERIATED_TERMS):
     print("Iteration no. ", iteration)
-
     addedTerm = 0
     if len(term_iter_index) > 0:
         addedTerm = term_iter_index[-1]
@@ -211,15 +139,19 @@ for iteration in range(DEFAULT_NUM_SERIATED_TERMS):
 seriation_time = time.time() - start_time
 
 print("seriation time: " +  str(seriation_time))
+print('Done with seriation step.')
 term_ordering, term_iter_index
 
 term_ordering = [dictionary.id2token[term] for term in term_ordering]
 term_iter_index = [str(index) for index in term_iter_index]
 # term_ordering, term_iter_index = compute()
-CheckAndMakeDirs( 'data/seriation/' )
-WriteAsList( term_ordering, 'data/seriation/term-ordering.txt' )
-WriteAsList( term_iter_index, 'data/seriation/term-iter-index.txt' )
-
+TERM_ORDERING = 'term-ordering.txt'
+TERM_ITER_INDEX = 'term-iter-index.txt'
+SUBFOLDER = 'seriation'
+path = '{}/{}/'.format( root, SUBFOLDER )
+CheckAndMakeDirs( path )
+WriteAsList( term_ordering, path + TERM_ORDERING)
+WriteAsList( term_iter_index, path + TERM_ITER_INDEX)
 
 term_topic_submatrix = []
 term_subindex = []
@@ -249,7 +181,6 @@ filtered_parameters = {
 }
 FILTERED_PARAMETERS = 'filtered-parameters.json'
 
-
 topic_index = [i for i in range(ldamodel.num_topics)]
 term_topic_submatrix = []
 term_subindex = []
@@ -270,7 +201,8 @@ global_term_freqs = {
     }
 GLOBAL_TERM_FREQS = 'global-term-freqs.json'
 
-SUBFOLDER = 'public_html/data'
+SUBFOLDER = 'data'
+path = '{}/{}/'.format( root, SUBFOLDER )
 CheckAndMakeDirs( SUBFOLDER )
 WriteAsJson( seriated_parameters, path + SERIATED_PARAMETERS )
 WriteAsJson( filtered_parameters, path + FILTERED_PARAMETERS )
